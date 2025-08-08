@@ -1,1 +1,1 @@
-from .trade_parser import TradeParser
+from .uniswap_v3_parser import UniswapV3Parser

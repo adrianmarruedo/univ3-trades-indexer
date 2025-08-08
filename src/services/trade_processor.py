@@ -5,9 +5,7 @@ from typing import Dict, Any
 from config import settings
 from src.kafka.consumer import TradeEventConsumer
 from src.models import TradeModel
-from src.db import Base
-from src.db.db_utils import create_tables
-from src.db.schemas.trade.trades_intake import save_trade_to_db
+from src.db.schemas.trade import insert_trades
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,11 +31,8 @@ class TradeProcessorService:
         self.running = False
     
     def initialize(self):
-        """Initialize database and Kafka consumer"""
+        """Initialize Kafka consumer"""
         try:
-            # Create tables if they don't exist using existing utility
-            create_tables(metadata=Base.metadata) # TODO: Think of deleting
-            
             self.kafka_consumer = TradeEventConsumer(
                 bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
                 group_id="trade-processor"
@@ -58,7 +53,11 @@ class TradeProcessorService:
         logger.info("Starting trade event processing...")
         
         try:
-            self.kafka_consumer.consume_messages(self._process_trade_message)
+            # Pass a lambda that checks self.running for graceful shutdown
+            self.kafka_consumer.consume_messages(
+                self._process_trade_message,
+                running_flag=lambda: self.running
+            )
             
         except Exception as e:
             logger.error(f"Fatal error in trade processing: {e}")
@@ -73,7 +72,7 @@ class TradeProcessorService:
             trade = TradeModel(**trade_data)
             
             # Save to database using existing utility function
-            save_trade_to_db(trade)
+            insert_trades([trade])
             
             logger.info(f"Processed and saved trade: {trade.tx_hash}")
             

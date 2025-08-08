@@ -18,7 +18,9 @@ async def main():
     service = EventListenerService(
         pool_address=USDC_ETH_POOL_ADDRESS,
         token_address_0=USDC,
-        token_address_1=WETH
+        token_address_1=WETH,
+        decimals_0=6,
+        decimals_1=18
     )
     
     try:

@@ -13,11 +13,15 @@ class TradeModel(BaseModel):
     chain_id: int
     block_num: int
     tx_hash: str
+    log_index: int
     type: str
-    maker: Address
-    taker: Address
+    pool_address: Address
+    sender: Address
+    recipient: Address
     amount_0: str  # BigInt as string for precision
     amount_1: str  # BigInt as string for precision
+    decimals_0: int
+    decimals_1: int
     token_address_0: Address
     token_address_1: Address
     block_time: Optional[datetime]
