@@ -53,7 +53,11 @@ class TradeProcessorService:
         logger.info("Starting trade event processing...")
         
         try:
-            self.kafka_consumer.consume_messages(self._process_trade_message)
+            # Pass a lambda that checks self.running for graceful shutdown
+            self.kafka_consumer.consume_messages(
+                self._process_trade_message,
+                running_flag=lambda: self.running
+            )
             
         except Exception as e:
             logger.error(f"Fatal error in trade processing: {e}")
