@@ -10,8 +10,8 @@ A real-time event-driven data pipeline that indexes all trades from the Uniswap 
 │   Listener      │    │   Message    │    │   Writter       │    │   Database   │
 │  (Component 1)  │    │    Queue     │    │  (Component 2)  │    │              │
 └─────────────────┘    └──────────────┘    └─────────────────┘    └──────────────┘
-         │                       │                    │                     │
-         │                       │                    │                     │
+         │                       │                    │                       │
+         │                       │                    │                       │
     ┌────▼────┐              ┌───▼───┐           ┌────▼───-──┐           ┌────▼────┐
     │ Alchemy |              |       |           |           |           |         |
     | Uniswap │              │ Event │           │ sqlalchemy│           │ Trade   │
@@ -56,6 +56,34 @@ A real-time event-driven data pipeline that indexes all trades from the Uniswap 
 - Reorg handling.
 - Implement different providers & Implement a retry backup strategy when the main provider fails.
 - Add indexes and constrains to the database. Better PK creation. Duplication proof.
+
+
+### Final Data Model
+
+#### Trades Table Schema
+
+```sql
+CREATE TABLE trades (
+    id                SERIAL PRIMARY KEY,
+    chain_id          INTEGER NOT NULL,
+    block_num         INTEGER NOT NULL,
+    tx_hash           VARCHAR(255) NOT NULL,
+    log_index         INTEGER NOT NULL,
+    
+    pool_address      VARCHAR(255) NOT NULL,
+    sender            VARCHAR(255) NOT NULL,
+    recipient         VARCHAR(255) NOT NULL,
+    amount_0          DECIMAL(54, 18) NOT NULL,  -- Token0 amount (BigInt precision)
+    amount_1          DECIMAL(54, 18) NOT NULL,  -- Token1 amount (BigInt precision)
+    trade_type        VARCHAR(10) NOT NULL,      -- 'BUY' or 'SELL'
+    token_address_0   VARCHAR(255) NOT NULL,     -- Token0 contract address
+    token_address_1   VARCHAR(255) NOT NULL,     -- Token1 contract address
+    
+    block_time        TIMESTAMP,
+    created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
 
 
 ## Quick Start
