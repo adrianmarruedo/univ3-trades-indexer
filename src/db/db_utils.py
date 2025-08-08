@@ -33,3 +33,25 @@ def create_tables(metadata: MetaData) -> None:
     except Exception as e:
         logging.error(e)
         logging.warning("Unsuccessful Tables Creation")
+        
+
+def create_database():
+    try:
+        engine = create_engine(
+            f"postgresql+psycopg2://{settings.POSTGRES_USER}:{settings.POSTGRES_PASS}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/postgres", 
+            future=True,
+            echo=False
+        )
+        
+        result = engine.execute(
+            text(f"SELECT 1 FROM pg_database WHERE datname = '{settings.POSTGRES_DATABASE}'")
+        )
+        if result.fetchone():
+            logging.info(f"Database '{settings.POSTGRES_DATABASE}' exists")
+        else:
+            engine.execute(text(f"CREATE DATABASE {settings.POSTGRES_DATABASE}"))
+            logging.info("Database created successfully")
+        
+    except Exception as e:
+        logging.error(e)
+        logging.warning("Unsuccessful Database Creation")
