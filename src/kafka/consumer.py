@@ -45,22 +45,40 @@ class TradeEventConsumer:
             logger.error(f"Failed to subscribe to topics {topics}: {e}")
             raise
     
-    def consume_messages(self, message_handler: Callable[[Dict[str, Any]], None]):
+    def consume_messages(self, message_handler: Callable[[Dict[str, Any]], None], running_flag=None):
         try:
             logger.info("Starting message consumption...")
             
-            for message in self.consumer:
-                try:
-                    trade_data = message.value
-                    message_key = message.key # TODO
-                    
-                    logger.debug(f"Received message from topic {message.topic}, partition {message.partition}, offset {message.offset}")
-                    
-                    message_handler(trade_data)
-                    
-                except Exception as e:
-                    logger.error(f"Error processing message: {e}")
-                    continue
+            while True:
+                # Check if we should stop (if running_flag is provided)
+                if running_flag is not None and not running_flag():
+                    logger.info("Stopping message consumption due to shutdown signal")
+                    break
+                
+                # Poll for messages with timeout to allow checking running_flag
+                message_batch = self.consumer.poll(timeout_ms=1000)
+                
+                if not message_batch:
+                    continue  # No messages, continue polling
+                
+                for topic_partition, messages in message_batch.items():
+                    for message in messages:
+                        # Check shutdown signal before processing each message
+                        if running_flag is not None and not running_flag():
+                            logger.info("Stopping message processing due to shutdown signal")
+                            return
+                        
+                        try:
+                            trade_data = message.value
+                            message_key = message.key
+                            
+                            logger.debug(f"Received message from topic {message.topic}, partition {message.partition}, offset {message.offset}")
+                            
+                            message_handler(trade_data)
+                            
+                        except Exception as e:
+                            logger.error(f"Error processing message: {e}")
+                            continue
                     
         except KafkaError as e:
             logger.error(f"Kafka error during consumption: {e}")
