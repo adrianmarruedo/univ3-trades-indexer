@@ -82,23 +82,47 @@ class EventListenerService:
             raise
     
     async def start_listening(self):
-        """Start listening to Uniswap V3 pool events"""
+        """Start listening for Uniswap V3 swap events via WebSocket"""
         self.running = True
-        logger.info(f"Starting to listen for events on pool: {self.pool_address}")
         
         try:
+            logger.info("Starting real-time WebSocket event listening...")
+            
+            # Use WebSocket for real-time event streaming
+            async for log_entry in self.provider.listen_for_events_realtime(
+                contract_address=self.pool_address,
+                topics=[UNISWAP_V3_SWAP_TOPIC]
+            ):
+                if not self.running: # Emergency stop
+                    logger.info("Stopping event listener...")
+                    break
+                    
+                try:
+                    await self._process_log_entry(log_entry)
+                except Exception as e:
+                    logger.error(f"Error processing log entry: {e}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"Error in WebSocket event listening: {e}")
+        finally:
+            if self.kafka_producer:
+                self.kafka_producer.close()
+    
+    async def polling_fallback(self):
+        """Polling fetching logs every 1 second. Keeping this just in case"""
+        try:
+            # Create event filter for Swap events
             event_filter = self.provider.create_event_filter(
                 contract_address=self.provider.checksum_address(self.pool_address),
                 topics=[UNISWAP_V3_SWAP_TOPIC]
             )
             
-            logger.info("Event filter created, waiting for new events...")
+            logger.info("Event filter created, using polling...")
             
-            # TODO: Upgrade to listening websocket
             while self.running:
                 try:
                     new_entries = event_filter.get_new_entries()
-                    
                     for log_entry in new_entries:
                         await self._process_log_entry(log_entry)
                     
@@ -106,20 +130,17 @@ class EventListenerService:
                     await asyncio.sleep(1) 
                     
                 except Exception as e:
-                    logger.error(f"Error processing events: {e}")
+                    logger.error(f"Error processing events in fallback mode: {e}")
                     await asyncio.sleep(5)  # Wait before retrying
                     
         except Exception as e:
-            logger.error(f"Fatal error in event listening: {e}")
+            logger.error(f"Error in polling fallback: {e}")
             raise
-        finally:
-            logger.info("Event listening stopped")
     
     async def _process_log_entry(self, log_entry):
         """Process a single log entry and send to Kafka"""
         try:
-            log_model = self.provider.parse_log(log_entry)
-            swap_event = self.parser.parse_swap_log(log_model)
+            swap_event = self.parser.parse_swap_log(log_entry)
             
             if swap_event:
                 # Convert swap event to trade using conform_trades method

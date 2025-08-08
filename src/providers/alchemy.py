@@ -1,8 +1,11 @@
 import logging
 import time
-from typing import Dict, List
+import asyncio
+import json
+from typing import Dict, List, AsyncGenerator
 
 from web3 import Web3
+import websockets
 
 from src.models import LogModel
 
@@ -15,12 +18,56 @@ class AlchemyProvider:
     def __init__(self, chain_id: int, host: str, websocket: str, api_key: str) -> None:
         self.chain_id = chain_id
         self._url = host
-        self._websocket_url = websocket
-        self._key = api_key
-        self._web3 = Web3(Web3.HTTPProvider(self._url + self._key))
+        self._websocket_url = websocket + api_key if not websocket.endswith(api_key) else websocket
+        self._web3 = Web3(Web3.HTTPProvider(host + api_key))
         
         if not self._web3.is_connected():
             raise Exception("Failed to connect to Web3 provider")
+            
+        # WebSocket connection will be established when needed
+        self._websocket = None
+        self._subscription_id = None
+
+    async def _connect_websocket(self):
+        """Establish WebSocket connection to Alchemy"""
+        try:
+            self._websocket = await websockets.connect(self._websocket_url)
+            logger.info("WebSocket connected")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to connect WebSocket: {e}")
+            return False
+    
+    async def _subscribe_to_logs(self, contract_address: str, topics: List[str]):
+        """Subscribe to real-time logs via WebSocket"""
+        if not self._websocket:
+            if not await self._connect_websocket():
+                raise Exception("Failed to establish WebSocket connection")
+        
+        subscription_request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_subscribe",
+            "params": [
+                "logs",
+                {
+                    "address": contract_address,
+                    "topics": topics
+                }
+            ]
+        }
+        
+        await self._websocket.send(json.dumps(subscription_request))
+        response = await self._websocket.recv()
+        response_data = json.loads(response)
+        
+        if "result" in response_data:
+            self._subscription_id = response_data["result"]
+            logger.info(f"Subscribed to logs with subscription ID: {self._subscription_id}")
+            return True
+        else:
+            logger.error(f"Failed to subscribe: {response_data}")
+            return False
 
     def parse_log(self, log) -> LogModel:
         """Returns the LogModel of the given log AttrDict"""
@@ -58,6 +105,7 @@ class AlchemyProvider:
                 data=log["data"],
                 log_index=self._web3.to_int(hexstr=log["logIndex"]),
                 deleted=bool(log["removed"]),
+                block_time=None
             )
             return log_model
         
@@ -110,3 +158,74 @@ class AlchemyProvider:
     
     def latest_block_number(self) -> int:
         return self._web3.eth.block_number
+    
+    async def listen_for_events_realtime(self, contract_address: str, topics: List[str]) -> AsyncGenerator[LogModel, None]:
+        """Listen for real-time events via WebSocket"""
+        try:
+            if not await self._subscribe_to_logs(contract_address, topics):
+                raise Exception("Failed to subscribe to logs")
+            
+            logger.info("Starting real-time event listening via WebSocket...")
+            
+            while True:
+                try:
+                    # Use timeout to allow periodic checks for shutdown
+                    message = await asyncio.wait_for(self._websocket.recv(), timeout=1.0)
+                    
+                    data = json.loads(message)
+                    
+                    if (data["method"] == "eth_subscription" and 
+                        data["params"]["subscription"] == self._subscription_id):
+                        
+                        log_data = data["params"]["result"]
+                        log_model = self.parse_log_dict(log_data)
+                        
+                        logger.debug(f"Received real-time log: block {log_model.block_num}, tx {log_model.transaction_hash}")
+                        yield log_model
+                        
+                except asyncio.TimeoutError:
+                    # Timeout allows for graceful shutdown checks
+                    continue
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse WebSocket message: {e}")
+                    continue
+                except Exception as e:
+                    logger.error(f"Error processing WebSocket message: {e}")
+                    continue
+                    
+        except websockets.exceptions.ConnectionClosed:
+            logger.warning("WebSocket connection closed")
+            raise
+        except Exception as e:
+            logger.error(f"Error in event listening: {e}")
+            raise
+        finally:
+            await self._cleanup_websocket()
+    
+    async def _cleanup_websocket(self):
+        """Clean up WebSocket connection and subscription"""
+        try:
+            if self._websocket and self._subscription_id:
+                # Unsubscribe before closing
+                unsubscribe_request = {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "eth_unsubscribe",
+                    "params": [self._subscription_id]
+                }
+                
+                await asyncio.wait_for(
+                    self._websocket.send(json.dumps(unsubscribe_request)), 
+                    timeout=2.0
+                )
+                logger.info(f"Unsubscribed from subscription {self._subscription_id}")
+            
+            if self._websocket:
+                await self._websocket.close()
+                logger.info("WebSocket connection closed")
+                
+        except Exception as e:
+            logger.error(f"Error during WebSocket cleanup: {e}")
+        finally:
+            self._websocket = None
+            self._subscription_id = None
