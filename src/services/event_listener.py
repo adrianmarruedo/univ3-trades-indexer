@@ -94,6 +94,7 @@ class EventListenerService:
             
             logger.info("Event filter created, waiting for new events...")
             
+            # TODO: Upgrade to listening websocket
             while self.running:
                 try:
                     new_entries = event_filter.get_new_entries()
@@ -102,7 +103,7 @@ class EventListenerService:
                         await self._process_log_entry(log_entry)
                     
                     # Sleep briefly to avoid overwhelming the provider
-                    await asyncio.sleep(1) # TODO CHECK
+                    await asyncio.sleep(1) 
                     
                 except Exception as e:
                     logger.error(f"Error processing events: {e}")

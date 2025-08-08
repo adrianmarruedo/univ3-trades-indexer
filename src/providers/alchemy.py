@@ -88,13 +88,13 @@ class AlchemyProvider:
     def get_logs_filtered(self, filter_dict: Dict) -> List[LogModel]:
         """Returns List of logs conformed to LogModel applying the EthFilter in filter_dict"""
         logs = []
-        st = time.time() # TODO: Delete
+        st = time.time()
 
         logs_provider = self._web3.eth.get_logs(filter_dict)
         for log in logs_provider:
             logs.append(self.parse_log(log))
-        et = time.time() # TODO: Delete
-        logger.debug(f"get_logs time: {et-st} seconds") # TODO: Delete
+        et = time.time()
+        logger.debug(f"get_logs_filtered time: {et-st} seconds") 
 
         return logs
 

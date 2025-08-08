@@ -49,7 +49,7 @@ class UniswapV3Parser:
             try:
                 decoded_data = decode(
                     ['int256', 'int256', 'uint160', 'uint128', 'int24'],
-                    bytes.fromhex(log.data[2:])  # Remove '0x' prefix
+                    bytes.fromhex(log.data[2:])  # Remove '0x' prefix # TODO: Verify
                 )
                 
                 amount0, amount1, sqrt_price_x96, liquidity, tick = decoded_data
