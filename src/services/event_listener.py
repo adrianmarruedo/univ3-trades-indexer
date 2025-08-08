@@ -7,7 +7,7 @@ from config import settings
 from src.kafka.producer import TradeEventProducer
 from src.providers.alchemy import AlchemyProvider
 from src.parsers.uniswap_v3_parser import UniswapV3Parser
-from src.constants.evm import UNISWAP_V3_SWAP_TOPIC, CHAIN_ID
+from src.constants.evm import UNISWAP_V3_SWAP_TOPIC, CHAIN_ID, DEFAULT_DECIMALS
 
 # Configure logging
 logging.basicConfig(
@@ -23,7 +23,14 @@ KAFKA_TOPIC_TRADES = "uniswap-v3-trades"
 class EventListenerService:
     """Service that listens to Uniswap V3 pool events and publishes to Kafka"""
     
-    def __init__(self, pool_address: str, token_address_0: str, token_address_1: str):
+    def __init__(
+        self, 
+        pool_address: str, 
+        token_address_0: str, 
+        token_address_1: str, 
+        decimals_0: int = DEFAULT_DECIMALS, 
+        decimals_1: int = DEFAULT_DECIMALS
+    ):
         self.running = False
         self.kafka_producer = None
         self.parser = None
@@ -31,6 +38,8 @@ class EventListenerService:
         self.pool_address = pool_address
         self.token_address_0 = token_address_0
         self.token_address_1 = token_address_1
+        self.decimals_0 = decimals_0
+        self.decimals_1 = decimals_1
         
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -58,7 +67,9 @@ class EventListenerService:
             self.parser = UniswapV3Parser(
                 pool_address=self.pool_address,
                 token_address_0=self.token_address_0,
-                token_address_1=self.token_address_1
+                token_address_1=self.token_address_1,
+                decimals_0=self.decimals_0,
+                decimals_1=self.decimals_1
             )
             
             # Initialize Kafka producer

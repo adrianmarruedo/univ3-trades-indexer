@@ -20,6 +20,8 @@ class SwapEventModel(BaseModel):
     amount_1: str
     token_address_0: str
     token_address_1: str
+    decimals_0: int
+    decimals_1: int
     trade_type: str  # "BUY" or "SELL"
     
     # Uniswap V3 specific data

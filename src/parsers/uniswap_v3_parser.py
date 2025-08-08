@@ -5,7 +5,7 @@ from web3 import Web3
 from eth_abi import decode
 
 from src.models import LogModel, SwapEventModel, TradeModel
-from src.constants.evm import UNISWAP_V3_SWAP_TOPIC
+from src.constants.evm import UNISWAP_V3_SWAP_TOPIC, DEFAULT_DECIMALS
 
 
 logger = logging.getLogger(__name__)
@@ -14,11 +14,20 @@ logger = logging.getLogger(__name__)
 class UniswapV3Parser:
     """Parser for Uniswap V3 Swap events"""
     
-    def __init__(self, pool_address: str, token_address_0: str, token_address_1: str):
+    def __init__(
+        self, 
+        pool_address: str, 
+        token_address_0: str, 
+        token_address_1: str, 
+        decimals_0: int = DEFAULT_DECIMALS, 
+        decimals_1: int = DEFAULT_DECIMALS
+    ):
         self.web3 = Web3()
         self.pool_address = pool_address
         self.token_address_0 = token_address_0
         self.token_address_1 = token_address_1
+        self.decimals_0 = decimals_0
+        self.decimals_1 = decimals_1
     
     def parse_swap_log(self, log: LogModel) -> Optional[SwapEventModel]:
         """Parse a raw log into a SwapEventModel ready for database insertion"""
@@ -61,6 +70,8 @@ class UniswapV3Parser:
                 recipient=recipient,
                 amount_0=str(amount0),
                 amount_1=str(amount1),
+                decimals_0=self.decimals_0,
+                decimals_1=self.decimals_1,
                 trade_type=trade_type,
                 sqrt_price_x96=str(sqrt_price_x96),
                 tick=tick,
@@ -84,11 +95,15 @@ class UniswapV3Parser:
                 chain_id=swap_event.chain_id,
                 block_num=swap_event.block_num,
                 tx_hash=swap_event.tx_hash,
+                log_index=swap_event.log_index,
                 type=swap_event.trade_type,  
-                maker=swap_event.sender,     
-                taker=swap_event.recipient,  
+                pool_address=swap_event.pool_address,     
+                sender=swap_event.sender,     
+                recipient=swap_event.recipient,  
                 amount_0=swap_event.amount_0,  # Keep as string
                 amount_1=swap_event.amount_1,  # Keep as string
+                decimals_0=swap_event.decimals_0,
+                decimals_1=swap_event.decimals_1,
                 token_address_0=swap_event.token_address_0,
                 token_address_1=swap_event.token_address_1,
                 block_time=swap_event.block_time
