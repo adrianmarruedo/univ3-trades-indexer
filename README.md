@@ -39,26 +39,6 @@ A real-time event-driven data pipeline that indexes all trades from the Uniswap 
 - We are currently using one topic (`uniswap-v3-trades`) and no partition. We could expand this to for example using topic `trades`. This would allow us to have different consumers for different events or general purposes (like txs, logs, etc). We could have a component for storing `logs` in the database subscribed to the `logs` topic, totally parallel to the other services.
 - We use `auto_offset_reset` set to `earliest` to ensure we don't miss any events
 
-## System upgradability:
-- The system is prepared to handle multiple pools for Uniswap V3. `EventListenerService` can be instantiated using pool_address, token_address_0, token_address_1, decimals_0, decimals_1. 
-- To listen to more events from the pool, we should add those extra topics to the `constants.evm` file. Then, proceed to implement the parsing in `src/parsers/uniswap_v3_parser.py`.
-- The project has been structured so we can fit more Parsers in `src/parsers/` with the idea of using a Parser interface. 
-
-## Scalability:
-- The system can scale horizontaly by increasing the number of trade processor services. This might be needed if we expand on the amount of pools/protocols that we are indexing.
-- Even if I made the `EventListenerService` horizontally scalable, I would NOT scale the event listener service horizontally in a real case. Instead, I would keep it minimal and general to listen to the SWAP topic of all pools, parse them, and then filter out the ones that we are interested in. Then, send it to the trade processor service.
-
-## Important notes:
-- The system is prepared to handle **reorgs**, but it is not a priority to handle them. Reorgs will be considerable when dealing with real time ethereum logs.
-
-## Possible Improvements:
-- The Diagram!!!
-- Use poetry to better handling dependencies.
-- For some pieces of data like token_addresses (0 and 1) and decimals, we will need another system to fetch those and store them. 
-- Reorg handling.
-- Implement different providers & Implement a retry backup strategy when the main provider fails.
-- Add indexes and constrains to the database. Better PK creation. Duplication proof.
-
 
 ## Final Data Model
 
